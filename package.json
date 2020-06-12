@@ -1,0 +1,19 @@
+{
+  "name": "griefergames-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Dominic",
+  "license": "ISC",
+  "dependencies": {
+    "dateformat": "^3.0.3",
+    "griefergames": "file:griefergames",
+    "serverline": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^13.7.0"
+  }
+}
