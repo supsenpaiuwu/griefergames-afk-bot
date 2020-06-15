@@ -7,90 +7,98 @@ const config = require('./config.json');
 const credentials = require('./credentials.json');
 
 let msgresponse = config.msgresponse != '';
-let portalErrorCounter;
+let connectErrorCount = 0;
+let connectedToCityBuild = false;
+let serverKickCounter = 0;
 let bot = null;
 let onlineTime = 0;
 let onlineTimeInterval;
 
 async function startBot() {
-  portalErrorCounter = 0;
-
   log('Connecting to server...');
 
   bot = gg.createBot({
     username: credentials.email,
     password: credentials.password,
     cacheSessions: true,
-    logMessages: false
+    logMessages: false,
+    solveAfkChallenge: true
   });
   
-  await bot.init();
+  try {
+    await bot.init();
+  } catch(err) {
+    log('An error occurred: '+err.message);
+    exit();
+  }
   
   bot.on('ready', async () => {
-    log('Connected. Trying to connect to CityBuild...');
+    log('Connected as '+bot.username+'. Trying to connect to CityBuild...');
 
     // count time bot is on the server in minutes
     onlineTimeInterval = setInterval(() => onlineTime++, 60000);
     
     // connect to citybuild
-    process.on('uncaughtException', err => {
-      if(err.message == 'Timed out while connecting on CityBuild.') {
-        connectError(err.message);
-      } else {
-        throw err;
+    if(config.citybuild != '') {
+      while(connectErrorCount < 5 && !connectedToCityBuild) {
+        const result: any = await connectToCitybuild(config.citybuild);
+        if(result.success) {
+          connectedToCityBuild = true;
+          log('Connected to CityBuild.');
+          // wait 2s until fully connected
+          setTimeout(() => {
+            // execute commands
+            config.commands.forEach(cmd => {
+              bot.sendCommand(cmd);
+            });
+          }, 2000);
+        } else {
+          connectErrorCount++;
+          log('Couldn\'t connect to CityBuild: '+result.error);
+        }
       }
-    });
-
-    try {
-      await bot.connectCityBuild(config.citybuild);
-
-      log('Connected to CityBuild.');
-      // wait 2s until fully connected
-      setTimeout(() => {
-        // execute commands
-        config.commands.forEach(cmd => {
-          bot.sendCommand(cmd);
-        });
-      }, 2000);
-    } catch(err) {
-      connectError(err.message);
-    }
-
-    function connectError(msg: String) {
-      log('Can\'t connect to CityBuild: "'+msg+'" Attempting to reconnect in 1 minute.');
-
-      stopBot();
-
-      portalErrorCounter++;
-      if(portalErrorCounter >= 5) {
-        log('Can\'t connect to CityBuild 5 times.');
+      if(!connectedToCityBuild) {
+        log('Couldn\'t connect to CityBuild 5 times.');
         exit();
       }
-
-      setTimeout(() => {
-        if(bot == null) startBot();
-      }, 60000);
     }
   });
   
-  // register kick event
+  // handle kick event
   bot.on('kicked', reason => {
-    log('Got kicked from the server: "'+JSON.parse(reason).text+'" Attempting to reconnect in 20 minutes.');
+    reason = JSON.parse(reason);
+    log('Got kicked from the server: "'+reason.text+'".');
 
-    stopBot();
-
-    setTimeout(() => {
-      if(bot == null) startBot();
-    }, 1200000);
+    switch(reason.text) {
+      case "§4Der Server wird heruntergefahren.":
+        stopBot();
+        setTimeout(() => {
+          //if(bot == null) startBot();
+          startBot();
+        }, 1200000); // 20min
+        break;
+      case "Du bist schon zu oft online!":
+        exit();
+        break;
+      default:
+        serverKickCounter++;
+        if(serverKickCounter < 5) {
+          stopBot();
+          //if(bot == null) startBot();
+          startBot();
+        } else {
+          exit();
+        }
+    }
   });
   
-  // register msg event
+  // handle msg event
   bot.on('msg', (rank, username, message) => {
     if(!msgresponse) return;
     bot.sendMsg(username, config.msgresponse);
   });
   
-  // register chat message event
+  // handle chat message event
   let broadcastMessage = false;
   bot.client.on('message', message => {
     // remove empty lines
@@ -109,11 +117,23 @@ async function startBot() {
 
     log('[Chat] '+message.toAnsi())
   });
+}
 
-  // register error event (not realy used)
-  bot.on('error', err => {
-    log('An error occurred: '+err);
+function connectToCitybuild(citybuild) {
+  return new Promise(async resolve => {
+    const timeout = setTimeout(() => {
+      resolve({success: false, error: 'Timed out while connecting to CityBuild.'});
+    }, 60000);
+    try {
+      await bot.connectCityBuild(citybuild);
+      clearTimeout(timeout);
+      resolve({success: true});
+    } catch(err) {
+      clearTimeout(timeout);
+      resolve({success: false, error: err.message});
+    }
   });
+  
 }
 
 function stopBot() {
@@ -135,11 +155,11 @@ startBot();
 
 // command prompt
 prompt.init();
-prompt.setCompletion(['#help', '#stop', '#msgresponse', '#onlinetime', '#listplayers']);
+prompt.setCompletion(['#help', '#stop', '#msgresponse', '#onlinetime', '#listplayers', '#citybuild']);
 prompt.on('SIGINT', () => {
   exit();
 });
-prompt.on('line', msg => {
+prompt.on('line', async msg => {
   if(msg.trim().startsWith('#')) {
     // bot commands
     const args = msg.trim().substr(1).split(' ');
@@ -150,7 +170,8 @@ prompt.on('line', msg => {
         log('#stop - Stop the bot.');
         log('#msgresponse [on|off] - Enable / Disable automatic response to private messages.');
         log('#onlinetime - Shows the online time of the bot.');
-        log('#listplayers - List the currently online players.')
+        log('#listplayers - List the currently online players.');
+        log('#citybuild <name> - Change CityBuild.');
         break;
 
       case 'stop':
@@ -192,6 +213,28 @@ prompt.on('line', msg => {
           log('Bot is not connected to server.')
         }
         break;
+
+        case 'citybuild':
+          if(args.length == 2) {
+            connectedToCityBuild = false;
+            connectErrorCount = 0;
+            while(connectErrorCount < 5 && !connectedToCityBuild) {
+              const result: any = await connectToCitybuild(args[1]);
+              if(result.success) {
+                connectedToCityBuild = true;
+                log('Connected to CityBuild.');
+              } else {
+                connectErrorCount++;
+                log('Couldn\'t connect to CityBuild: '+result.error);
+              }
+            }
+            if(!connectedToCityBuild) {
+              log('Couldn\'t connect to CityBuild 5 times.');
+            }
+          } else {
+            log('Usage: #citybuild <name>');
+          }
+          break;
 
       default:
         log('Unknown command "#'+args[0]+'". View available commands with #help');
