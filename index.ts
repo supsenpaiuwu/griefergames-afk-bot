@@ -1,10 +1,22 @@
 export {};
 
 const gg = require('griefergames');
+const fs = require('fs');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
 const config = require('./config.json');
 const credentials = require('./credentials.json');
+
+let logFile;
+if(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'.log')) {
+  let counter = 1;
+  while(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log')) {
+    counter++;
+  }
+  logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log', 'a');
+} else {
+  logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'.log', 'a');
+}
 
 let msgresponse = config.msgresponse != '';
 let connectErrorCount = 0;
@@ -33,7 +45,7 @@ async function startBot() {
   }
   
   bot.on('ready', async () => {
-    log('Connected as '+bot.username+'. Trying to connect to CityBuild...');
+    log('Connected as '+bot.client.username+'. Trying to connect to CityBuild...');
 
     // count time bot is on the server in minutes
     onlineTimeInterval = setInterval(() => onlineTime++, 60000);
@@ -252,5 +264,7 @@ prompt.on('line', async msg => {
 
 function log(message: String) {
   const time = dateFormat(new Date(), 'HH:MM:ss');
-  console.log('['+time+'] '+message);
+  message = '['+time+'] '+message;
+  console.log(message);
+  fs.appendFileSync(logFile, message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')+'\n');
 }
