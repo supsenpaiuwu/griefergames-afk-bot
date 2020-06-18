@@ -113,6 +113,11 @@ async function startBot() {
   // handle chat message event
   let broadcastMessage = false;
   bot.client.on('message', message => {
+    // remove messages from ignore list
+    if(config.ignoreMessages.includes(message.toString())) {
+      return;
+    }
+
     // remove empty lines
     if(message.toString().trim() == '') return;
 
