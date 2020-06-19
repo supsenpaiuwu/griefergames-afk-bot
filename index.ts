@@ -52,6 +52,7 @@ async function startBot() {
     
     // connect to citybuild
     if(config.citybuild != '') {
+      connectErrorCount = 0;
       while(connectErrorCount < 5 && !connectedToCityBuild) {
         const result: any = await connectToCitybuild(config.citybuild);
         if(result.success) {
@@ -159,6 +160,7 @@ function stopBot() {
     bot.clean();
     bot = null;
   }
+  connectedToCityBuild = false;
   clearInterval(onlineTimeInterval);
 }
 
@@ -231,27 +233,27 @@ prompt.on('line', async msg => {
         }
         break;
 
-        case 'citybuild':
-          if(args.length == 2) {
-            connectedToCityBuild = false;
-            connectErrorCount = 0;
-            while(connectErrorCount < 5 && !connectedToCityBuild) {
-              const result: any = await connectToCitybuild(args[1]);
-              if(result.success) {
-                connectedToCityBuild = true;
-                log('Connected to CityBuild.');
-              } else {
-                connectErrorCount++;
-                log('Couldn\'t connect to CityBuild: '+result.error);
-              }
+      case 'citybuild':
+        if(args.length == 2) {
+          connectedToCityBuild = false;
+          connectErrorCount = 0;
+          while(connectErrorCount < 5 && !connectedToCityBuild) {
+            const result: any = await connectToCitybuild(args[1]);
+            if(result.success) {
+              connectedToCityBuild = true;
+              log('Connected to CityBuild.');
+            } else {
+              connectErrorCount++;
+              log('Couldn\'t connect to CityBuild: '+result.error);
             }
-            if(!connectedToCityBuild) {
-              log('Couldn\'t connect to CityBuild 5 times.');
-            }
-          } else {
-            log('Usage: #citybuild <name>');
           }
-          break;
+          if(!connectedToCityBuild) {
+            log('Couldn\'t connect to CityBuild 5 times.');
+          }
+        } else {
+          log('Usage: #citybuild <name>');
+        }
+        break;
 
       default:
         log('Unknown command "#'+args[0]+'". View available commands with #help');
