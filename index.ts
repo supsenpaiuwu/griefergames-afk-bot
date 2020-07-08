@@ -7,18 +7,25 @@ const prompt = require('serverline');
 const config = require('./config.json');
 const credentials = require('./credentials.json');
 
+const tpaRegEx = /^([A-Za-z\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob er sich zu dir teleportieren darf.$/;
+const tpahereRegEx = /^([A-Za-z\\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob du dich zu ihm teleportierst.$/;
+
 let logFile;
-if(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'.log')) {
-  let counter = 1;
-  while(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log')) {
-    counter++;
+if(config.logMessages) {
+  if(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'.log')) {
+    let counter = 1;
+    while(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log')) {
+      counter++;
+    }
+    logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log', 'a');
+  } else {
+    logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'.log', 'a');
   }
-  logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log', 'a');
-} else {
-  logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'.log', 'a');
 }
 
-let msgresponse = config.msgresponse != '';
+let msgResponse = config.msgResponse != '';
+let displayChat = config.displayChat;
+let authorisedPlayers = config.authorisedPlayers;
 let connectErrorCount = 0;
 let connectedToCityBuild = false;
 let serverKickCounter = 0;
@@ -85,8 +92,11 @@ async function startBot() {
     switch(reason.text) {
       case "§4Der Server wird heruntergefahren.":
         stopBot();
+        if(!config.reconnectAfterRestart) {
+          exit();
+          break;
+        }
         setTimeout(() => {
-          //if(bot == null) startBot();
           startBot();
         }, 1200000); // 20min
         break;
@@ -107,8 +117,47 @@ async function startBot() {
   
   // handle msg event
   bot.on('msg', (rank, username, message) => {
-    if(!msgresponse) return;
-    bot.sendMsg(username, config.msgresponse);
+    if(authorisedPlayers.includes(username)) {
+      // Authorised players
+      const cmd = message.split(' ');
+      switch(cmd[0]) {
+        case 'logout':
+          authorisedPlayers = authorisedPlayers.filter(e => e !== username);
+          bot.sendMsg(username, 'Du bist nun abgemeldet.');
+          break;
+        case 'chat':
+          if(cmd.length >= 2) {
+            cmd.shift()
+            bot.sendChat(cmd.join(' '));
+          } else {
+            bot.sendMsg(username, 'Verwendung: chat <Nachricht|Befehl>');
+          }
+          break;
+        case 'stop':
+          bot.sendMsg(username, 'Bot wird beendet.');
+          break;
+
+        case 'dropinv':
+          dropInventory();
+          break;
+          
+        default:
+          bot.sendMsg(username, `Der Befehl "${message}" wurde nicht gefunden.`);
+      }
+    } else {
+      // Not authorised players
+      if(message.startsWith('login')) {
+        const cmd = message.split(' ');
+        if(cmd.length == 2 && cmd[1] === credentials.controlPassword) {
+          authorisedPlayers.push(username);
+          bot.sendMsg(username, 'Hey, du bist nun angemeldet.');
+        } else {
+          bot.sendMsg(username, 'Das Passwort ist nicht korrekt!')
+        }
+      } else if(msgResponse) {
+        bot.sendMsg(username, 'Test: '+config.msgResponse);
+      }
+    }
   });
   
   // handle chat message event
@@ -133,7 +182,22 @@ async function startBot() {
       return;
     }
 
-    log('[Chat] '+message.toAnsi())
+    // tpa
+    let result = tpaRegEx.exec(message.toString());
+    if(result != null) {
+      if(authorisedPlayers.includes(result[2])) {
+        bot.sendCommand('tpaccept '+result[2]);
+      }
+    }
+    // tpahere
+    result = tpahereRegEx.exec(message.toString());
+    if(result != null) {
+      if(authorisedPlayers.includes(result[2])) {
+        bot.sendCommand('tpaccept '+result[2]);
+      }
+    }
+
+    log('[Chat] '+message.toAnsi(), !displayChat);
   });
 }
 
@@ -170,11 +234,26 @@ function exit() {
   setTimeout(() => process.exit(), 100);
 }
 
+function dropInventory() {
+  return new Promise(async resolve => {
+    await asyncForEach(bot.client.inventory.items(), async item => {
+        await new Promise(resolve1 => {
+            bot.client.tossStack(item, resolve1);
+        });
+    });
+    resolve();
+  });
+}
+
+function saveConfig() {
+  fs.writeFileSync('./config.json', JSON.stringify(config, null, 4));
+}
+
 startBot();
 
 // command prompt
 prompt.init();
-prompt.setCompletion(['#help', '#stop', '#msgresponse', '#onlinetime', '#listplayers', '#citybuild']);
+prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise', '#listauthorised', '#dropinv']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -187,10 +266,15 @@ prompt.on('line', async msg => {
         log('Available commands:');
         log('#help - Print this list.');
         log('#stop - Stop the bot.');
-        log('#msgresponse [on|off] - Enable / Disable automatic response to private messages.');
-        log('#onlinetime - Shows the online time of the bot.');
+        log('#msgresponse [on|off] - Enable or disable automatic response to private messages.');
+        log('#togglechat - Show or hide the chat.');
+        log('#onlinetime - Show the online time of the bot.');
         log('#listplayers - List the currently online players.');
-        log('#citybuild <name> - Change CityBuild.');
+        log('#citybuild <cb name> - Change CityBuild.');
+        log('#authorise <name> - Authorise a player to execute bot commands.');
+        log('#unauthorise <name> - Unauthorise a player.');
+        log('#listauthorised - List the authorised players.');
+        log('#dropinv - Let the bot drop all items in its inventory.')
         break;
 
       case 'stop':
@@ -199,22 +283,27 @@ prompt.on('line', async msg => {
       
       case 'msgresponse':
         if(args.length == 1) {
-          log('Automatic response is '+(msgresponse ? 'on.' : 'off.'));
+          log('Automatic response is '+(msgResponse ? 'on.' : 'off.'));
         } else {
           if(args[1].toLowerCase() == 'on') {
-            if(config.msgresponse != '') {
-              msgresponse = true;
+            if(config.msgResponse != '') {
+              msgResponse = true;
               log('Turned on automatic response.');
             } else {
               log('No response specified in config file.')
             }
           } else if(args[1].toLowerCase() == 'off') {
-            msgresponse = false;
+            msgResponse = false;
             log('Turned off automatic response.');
           } else {
             log('Usage: #msgresponse [on|off]');
           }
         }
+        break;
+
+      case 'togglechat':
+        displayChat = !displayChat;
+        log((displayChat ? 'Enabled' : 'Disabled')+' chat messages.');
         break;
 
       case 'onlinetime':
@@ -251,8 +340,42 @@ prompt.on('line', async msg => {
             log('Couldn\'t connect to CityBuild 5 times.');
           }
         } else {
-          log('Usage: #citybuild <name>');
+          log('Usage: #citybuild <cb name>');
         }
+        break;
+
+      case 'authorise':
+        if(args.length == 2) {
+          if(!authorisedPlayers.includes(args[1])) {
+            authorisedPlayers.push(args[1]);
+            log('Authorised the player '+args[1]+'.');
+          } else {
+            log('The player is already authorised.');
+          }
+        } else {
+          log('Usage: #authorise <name>');
+        }
+        break;
+
+      case 'unauthorise':
+        if(args.length == 2) {
+          if(authorisedPlayers.includes(args[1])) {
+            authorisedPlayers = authorisedPlayers.filter(e => e !== args[1]);
+            log('Removed the player '+args[1]+'.');
+          } else {
+            log('The player is not authorised.');
+          }
+        } else {
+          log('Usage: #unauthorise <name>');
+        }
+        break;
+
+      case 'listauthorised':
+        log('Authorised players: '+authorisedPlayers.join(', '));
+        break;
+
+      case 'dropinv':
+        dropInventory();
         break;
 
       default:
@@ -263,15 +386,21 @@ prompt.on('line', async msg => {
     if(bot != null && bot.isOnline()) {
       bot.sendChat(msg);
     } else {
-      log('Bot is not connected to server.')
+      log('Bot is not connected to server.');
     }
   }
 });
 
 
-function log(message: String) {
+function log(message, onlyLogFile = false) {
   const time = dateFormat(new Date(), 'HH:MM:ss');
   message = '['+time+'] '+message;
-  console.log(message);
-  fs.appendFileSync(logFile, message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')+'\n');
+  if(!onlyLogFile) console.log(message);
+  if(config.logMessages) fs.appendFileSync(logFile, message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')+'\n');
+}
+
+async function asyncForEach(array, callback) {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array);
+  }
 }
