@@ -312,11 +312,8 @@ prompt.on('line', async msg => {
 
       case 'listplayers':
         if(bot != null && bot.isOnline()) {
-          const list = [];
-          Object.keys(bot.client.players).forEach(player => {
-            list.push(player);
-          });
-          log('Online players: '+list.join(', '));
+          const list = Object.keys(bot.client.players);
+          log('Online players ('+list.length+'): '+list.join(', '));
         } else {
           log('Bot is not connected to server.')
         }
