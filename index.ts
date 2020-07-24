@@ -4,11 +4,13 @@ const gg = require('griefergames');
 const fs = require('fs');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
+//const wildcard = require('wildcard');
 const config = require('./config.json');
 const credentials = require('./credentials.json');
 
 const tpaRegEx = /^([A-Za-z\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob er sich zu dir teleportieren darf.$/;
 const tpahereRegEx = /^([A-Za-z\\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob du dich zu ihm teleportierst.$/;
+const cityBuildConnectLimit = 3;
 
 let logFile;
 if(config.logMessages) {
@@ -26,8 +28,7 @@ if(config.logMessages) {
 let msgResponse = config.msgResponse != '';
 let displayChat = config.displayChat;
 let authorisedPlayers = config.authorisedPlayers;
-let connectErrorCount = 0;
-let connectedToCityBuild = false;
+let connectingToCityBuild = false;
 let serverKickCounter = 0;
 let bot = null;
 let onlineTime = 0;
@@ -59,11 +60,12 @@ async function startBot() {
     
     // connect to citybuild
     if(config.citybuild != '') {
-      connectErrorCount = 0;
-      while(connectErrorCount < 5 && !connectedToCityBuild) {
+      connectingToCityBuild = true;
+      let connectErrorCount = 0;
+      while(connectErrorCount < cityBuildConnectLimit && connectingToCityBuild) {
         const result: any = await connectToCitybuild(config.citybuild);
         if(result.success) {
-          connectedToCityBuild = true;
+          connectingToCityBuild = false;
           log('Connected to CityBuild.');
           // wait 2s until fully connected
           setTimeout(() => {
@@ -77,8 +79,8 @@ async function startBot() {
           log('Couldn\'t connect to CityBuild: '+result.error);
         }
       }
-      if(!connectedToCityBuild) {
-        log('Couldn\'t connect to CityBuild 5 times.');
+      if(connectErrorCount >= cityBuildConnectLimit) {
+        log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
         exit();
       }
     }
@@ -107,8 +109,9 @@ async function startBot() {
         serverKickCounter++;
         if(serverKickCounter < 5) {
           stopBot();
-          //if(bot == null) startBot();
-          startBot();
+          setTimeout(() => {
+            startBot();
+          }, 5000);
         } else {
           exit();
         }
@@ -135,6 +138,7 @@ async function startBot() {
           break;
         case 'stop':
           bot.sendMsg(username, 'Bot wird beendet.');
+          exit();
           break;
 
         case 'dropinv':
@@ -164,8 +168,10 @@ async function startBot() {
   let broadcastMessage = false;
   bot.client.on('message', message => {
     // remove messages from ignore list
-    if(config.ignoreMessages.includes(message.toString())) {
-      return;
+    for(let i=0; i<config.ignoreMessages.length; i++) {
+      if(message.toString().startsWith(config.ignoreMessages[i])) {
+        return;
+      }
     }
 
     // remove empty lines
@@ -224,7 +230,7 @@ function stopBot() {
     bot.clean();
     bot = null;
   }
-  connectedToCityBuild = false;
+  connectingToCityBuild = false;
   clearInterval(onlineTimeInterval);
 }
 
@@ -321,20 +327,24 @@ prompt.on('line', async msg => {
 
       case 'citybuild':
         if(args.length == 2) {
-          connectedToCityBuild = false;
-          connectErrorCount = 0;
-          while(connectErrorCount < 5 && !connectedToCityBuild) {
-            const result: any = await connectToCitybuild(args[1]);
-            if(result.success) {
-              connectedToCityBuild = true;
-              log('Connected to CityBuild.');
-            } else {
-              connectErrorCount++;
-              log('Couldn\'t connect to CityBuild: '+result.error);
+          if(!connectingToCityBuild) {
+            connectingToCityBuild = true;
+            let connectErrorCount = 0;
+            while(connectErrorCount < cityBuildConnectLimit && connectingToCityBuild) {
+              const result: any = await connectToCitybuild(args[1]);
+              if(result.success) {
+                connectingToCityBuild = false;
+                log('Connected to CityBuild.');
+              } else {
+                connectErrorCount++;
+                log('Couldn\'t connect to CityBuild: '+result.error);
+              }
             }
-          }
-          if(!connectedToCityBuild) {
-            log('Couldn\'t connect to CityBuild 5 times.');
+            if(connectErrorCount >= cityBuildConnectLimit) {
+              log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+            }
+          } else {
+            log('Already connecting to citybuild. Please wait...');
           }
         } else {
           log('Usage: #citybuild <cb name>');
