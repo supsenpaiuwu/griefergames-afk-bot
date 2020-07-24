@@ -20,6 +20,7 @@ let serverKickCounter = 0;
 let bot;
 let onlineTime = 0;
 let onlineTimeInterval;
+let currentCityBuild = 'Offline';
 
 loadConfig();
 
@@ -207,6 +208,14 @@ async function startBot() {
 
     log('[Chat] '+message.toAnsi(), !displayChat);
   });
+
+  bot.client._client.on('packet', (data, metadata) => {
+    if (metadata.name == 'scoreboard_team') {
+      if(data.team == 'server' && data.prefix != null) {
+        currentCityBuild = data.prefix;
+      }
+    }
+  });
 }
 
 function connectToCitybuild(citybuild) {
@@ -233,6 +242,7 @@ function stopBot() {
     bot = null;
   }
   connectingToCityBuild = false;
+  currentCityBuild = 'Offline';
   clearInterval(onlineTimeInterval);
 }
 
@@ -268,7 +278,7 @@ startBot();
 // command prompt
 prompt.init();
 prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise',
-  '#listauthorised', '#dropinv', '#reloadconfig']);
+  '#listauthorised', '#dropinv', '#reloadconfig', '#currentcb']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -291,6 +301,7 @@ prompt.on('line', async msg => {
         log('#listauthorised - List the authorised players.');
         log('#dropinv - Let the bot drop all items in its inventory.');
         log('#reloadconfig - Reload the configuration file.');
+        log('#currentcb - Displays the current CityBuild of the bot.')
         break;
 
       case 'stop':
@@ -347,7 +358,12 @@ prompt.on('line', async msg => {
                 log('Connected to CityBuild.');
               } else {
                 connectErrorCount++;
-                log('Couldn\'t connect to CityBuild: '+result.error);
+                if(result.error.startsWith('There is no CityBuild named')) {
+                  log(result.error);
+                  connectingToCityBuild = false;
+                } else {
+                  log('Couldn\'t connect to CityBuild: '+result.error);
+                }
               }
             }
             if(connectErrorCount >= cityBuildConnectLimit) {
@@ -398,6 +414,10 @@ prompt.on('line', async msg => {
       case 'reloadconfig':
         loadConfig();
         log('Configuration reloaded.');
+        break;
+
+      case 'currentcb':
+        log('Your current CityBuild: '+currentCityBuild);
         break;
 
       default:
