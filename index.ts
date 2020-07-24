@@ -5,12 +5,23 @@ const fs = require('fs');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
 //const wildcard = require('wildcard');
-const config = require('./config.json');
 const credentials = require('./credentials.json');
 
 const tpaRegEx = /^([A-Za-z\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob er sich zu dir teleportieren darf.$/;
 const tpahereRegEx = /^([A-Za-z\\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob du dich zu ihm teleportierst.$/;
 const cityBuildConnectLimit = 3;
+
+let config;
+let msgResponse = false;
+let displayChat = true;
+let authorisedPlayers = [];
+let connectingToCityBuild = false;
+let serverKickCounter = 0;
+let bot;
+let onlineTime = 0;
+let onlineTimeInterval;
+
+loadConfig();
 
 let logFile;
 if(config.logMessages) {
@@ -24,15 +35,6 @@ if(config.logMessages) {
     logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'.log', 'a');
   }
 }
-
-let msgResponse = config.msgResponse != '';
-let displayChat = config.displayChat;
-let authorisedPlayers = config.authorisedPlayers;
-let connectingToCityBuild = false;
-let serverKickCounter = 0;
-let bot = null;
-let onlineTime = 0;
-let onlineTimeInterval;
 
 async function startBot() {
   log('Connecting to server...');
@@ -159,7 +161,7 @@ async function startBot() {
           bot.sendMsg(username, 'Das Passwort ist nicht korrekt!')
         }
       } else if(msgResponse) {
-        bot.sendMsg(username, 'Test: '+config.msgResponse);
+        bot.sendMsg(username, config.msgResponse);
       }
     }
   });
@@ -254,12 +256,19 @@ function dropInventory() {
 function saveConfig() {
   fs.writeFileSync('./config.json', JSON.stringify(config, null, 4));
 }
+function loadConfig() {
+  config = JSON.parse(fs.readFileSync('./config.json'));
+  displayChat = config.displayChat;
+  authorisedPlayers = config.authorisedPlayers;
+  msgResponse = config.msgResponse != '';
+}
 
 startBot();
 
 // command prompt
 prompt.init();
-prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise', '#listauthorised', '#dropinv']);
+prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise',
+  '#listauthorised', '#dropinv', '#reloadconfig']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -280,7 +289,8 @@ prompt.on('line', async msg => {
         log('#authorise <name> - Authorise a player to execute bot commands.');
         log('#unauthorise <name> - Unauthorise a player.');
         log('#listauthorised - List the authorised players.');
-        log('#dropinv - Let the bot drop all items in its inventory.')
+        log('#dropinv - Let the bot drop all items in its inventory.');
+        log('#reloadconfig - Reload the configuration file.');
         break;
 
       case 'stop':
@@ -383,6 +393,11 @@ prompt.on('line', async msg => {
 
       case 'dropinv':
         dropInventory();
+        break;
+
+      case 'reloadconfig':
+        loadConfig();
+        log('Configuration reloaded.');
         break;
 
       default:
