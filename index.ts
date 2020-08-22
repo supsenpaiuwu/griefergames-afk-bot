@@ -1,7 +1,17 @@
 export {};
 
-const gg = require('griefergames');
 const fs = require('fs');
+
+// the boundingBox of nether portals and carpets have to be changed to empty
+const minecraft_data_blocks = require('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json');
+for(let i=0; i<minecraft_data_blocks.length; i++) {
+  if(minecraft_data_blocks[i].id == 90 || minecraft_data_blocks[i].id == 171) {
+    minecraft_data_blocks[i].boundingBox = 'empty';
+  }
+}
+fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json', JSON.stringify(minecraft_data_blocks, null, 4));
+
+const gg = require('griefergames');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
 const credentials = require('./credentials.json');
