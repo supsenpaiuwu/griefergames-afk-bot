@@ -2,13 +2,9 @@ export {};
 
 const gg = require('griefergames');
 const fs = require('fs');
-const dateFormat = require('dateformat');
-const prompt = require('serverline');
-//const wildcard = require('wildcard');
+const dateFormat = require('dateformatconst prompt = require('serverline');
 const credentials = require('./credentials.json');
 
-const tpaRegEx = /^([A-Za-z\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob er sich zu dir teleportieren darf.$/;
-const tpahereRegEx = /^([A-Za-z\\-]+\+?) \u2503 ((\u007E)?\w{1,16}) fragt, ob du dich zu ihm teleportierst.$/;
 const cityBuildConnectLimit = 3;
 
 let config;
@@ -45,7 +41,8 @@ async function startBot() {
     password: credentials.password,
     cacheSessions: true,
     logMessages: false,
-    solveAfkChallenge: true
+    solveAfkChallenge: true,
+    setPortalTimeout: false
   });
   
   try {
@@ -120,6 +117,10 @@ async function startBot() {
         }
     }
   });
+
+  bot.end('end', () => {
+    console.log('DEBUG: Session ended.');
+  });
   
   // handle msg event
   bot.on('msg', (rank, username, message) => {
@@ -191,22 +192,19 @@ async function startBot() {
       return;
     }
 
-    // tpa
-    let result = tpaRegEx.exec(message.toString());
-    if(result != null) {
-      if(authorisedPlayers.includes(result[2])) {
-        bot.sendCommand('tpaccept '+result[2]);
-      }
-    }
-    // tpahere
-    result = tpahereRegEx.exec(message.toString());
-    if(result != null) {
-      if(authorisedPlayers.includes(result[2])) {
-        bot.sendCommand('tpaccept '+result[2]);
-      }
-    }
-
     log('[Chat] '+message.toAnsi(), !displayChat);
+  });
+
+  bot.on('tpa', (rank, name) => {
+    if(authorisedPlayers.includes(name)) {
+      bot.sendCommand('tpaccept '+name);
+    }
+  });
+
+  bot.on('tpahere', (rank, name) => {
+    if(authorisedPlayers.includes(name)) {
+      bot.sendCommand('tpaccept '+name);
+    }
   });
 
   bot.client._client.on('packet', (data, metadata) => {

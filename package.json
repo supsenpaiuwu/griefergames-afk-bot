@@ -10,11 +10,10 @@
   "license": "ISC",
   "dependencies": {
     "dateformat": "^3.0.3",
-    "griefergames": "git+https://github.com/Neocraftr/griefergames.git",
-    "serverline": "^1.4.2",
-    "wildcard": "^2.0.0"
+    "griefergames": "git+https://github.com/Neocraftr/griefergames-bot.git",
+    "serverline": "^1.5.0"
   },
   "devDependencies": {
-    "@types/node": "^13.7.0"
+    "@types/node": "^13.13.15"
   }
 }
