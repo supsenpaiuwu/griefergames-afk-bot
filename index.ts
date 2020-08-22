@@ -2,7 +2,8 @@ export {};
 
 const gg = require('griefergames');
 const fs = require('fs');
-const dateFormat = require('dateformatconst prompt = require('serverline');
+const dateFormat = require('dateformat');
+const prompt = require('serverline');
 const credentials = require('./credentials.json');
 
 const cityBuildConnectLimit = 3;
