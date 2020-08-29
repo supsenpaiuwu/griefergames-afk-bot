@@ -4,12 +4,16 @@ const fs = require('fs');
 
 // the boundingBox of nether portals and carpets have to be changed to empty
 const minecraft_data_blocks = require('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json');
+let changed = false;
 for(let i=0; i<minecraft_data_blocks.length; i++) {
   if(minecraft_data_blocks[i].id == 90 || minecraft_data_blocks[i].id == 171) {
-    minecraft_data_blocks[i].boundingBox = 'empty';
+    if(minecraft_data_blocks[i].boundingBox != 'empty') {
+      minecraft_data_blocks[i].boundingBox = 'empty';
+      changed = true;
+    }
   }
 }
-fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json', JSON.stringify(minecraft_data_blocks, null, 4));
+if(changed) fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json', JSON.stringify(minecraft_data_blocks, null, 4));
 
 const gg = require('griefergames');
 const dateFormat = require('dateformat');
@@ -20,6 +24,7 @@ const cityBuildConnectLimit = 3;
 const serverKickLimit = 3;
 
 let config;
+let credentials;
 let bot;
 let onlineTimeInterval;
 let connectingToCityBuild = false;
@@ -39,7 +44,7 @@ const argv = yargs
 
 let profile = argv.profile != null ? argv.profile : 'default';
 loadConfig();
-console.log(config);
+loadCredentials();
 
 let logFile;
 if(config.logMessages) {
@@ -57,7 +62,6 @@ if(config.logMessages) {
 async function startBot() {
   log('Connecting to server...');
 
-  const credentials = getCredentials();
   bot = gg.createBot({
     username: credentials.email,
     password: credentials.password,
@@ -294,9 +298,9 @@ function loadConfig() {
     log('Couldn\'t load config: '+err.message);
   }
 }
-function getCredentials() {
+function loadCredentials() {
   const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
-  return credentialsFile[config.account];
+  credentials = credentialsFile[config.account];
 }
 
 startBot();
