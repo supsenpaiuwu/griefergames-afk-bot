@@ -308,7 +308,7 @@ startBot();
 // command prompt
 prompt.init();
 prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise',
-  '#listauthorised', '#dropinv', '#reloadconfig', '#currentcb']);
+  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -325,13 +325,13 @@ prompt.on('line', async msg => {
         log('#togglechat - Show or hide the chat.');
         log('#onlinetime - Show the online time of the bot.');
         log('#listplayers - List the currently online players.');
-        log('#citybuild <cb name> - Change CityBuild.');
+        log('#citybuild [cb name] - Change CityBuild.');
         log('#authorise <name> - Authorise a player to execute bot commands.');
         log('#unauthorise <name> - Unauthorise a player.');
         log('#listauthorised - List the authorised players.');
         log('#dropinv - Let the bot drop all items in its inventory.');
+        log('#listinv - Display the bots inventory.')
         log('#reloadconfig - Reload the configuration file.');
-        log('#currentcb - Displays the current CityBuild of the bot.')
         break;
 
       case 'stop':
@@ -377,7 +377,9 @@ prompt.on('line', async msg => {
         break;
 
       case 'citybuild':
-        if(args.length == 2) {
+        if(args.length == 1) {
+          log('Your current CityBuild: '+currentCityBuild);
+        } else if(args.length == 2) {
           if(!connectingToCityBuild) {
             connectingToCityBuild = true;
             let connectErrorCount = 0;
@@ -403,7 +405,7 @@ prompt.on('line', async msg => {
             log('Already connecting to citybuild. Please wait...');
           }
         } else {
-          log('Usage: #citybuild <cb name>');
+          log('Usage: #citybuild [cb name]');
         }
         break;
 
@@ -440,14 +442,17 @@ prompt.on('line', async msg => {
       case 'dropinv':
         dropInventory();
         break;
+        
+      case 'listinv':
+        log('Inventory:');
+        bot.client.inventory.items().forEach(item => {
+          log(`Slot ${item.slot} - ${item.count}x ${item.displayName} (${item.type}:${item.metadata})`);
+        });
+        break;
 
       case 'reloadconfig':
         loadConfig();
         log('Configuration reloaded.');
-        break;
-
-      case 'currentcb':
-        log('Your current CityBuild: '+currentCityBuild);
         break;
 
       default:
