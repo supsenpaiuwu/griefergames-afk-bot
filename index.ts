@@ -14,23 +14,32 @@ fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/block
 const gg = require('griefergames');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
-const credentials = require('./credentials.json');
+const yargs = require('yargs');
 
 const cityBuildConnectLimit = 3;
 const serverKickLimit = 3;
 
 let config;
-let msgResponse = false;
-let displayChat = true;
-let authorisedPlayers = [];
-let connectingToCityBuild = false;
-let serverKickCounter = 0;
 let bot;
-let onlineTime = 0;
 let onlineTimeInterval;
+let connectingToCityBuild = false;
 let currentCityBuild = 'Offline';
+let serverKickCounter = 0;
+let onlineTime = 0;
 
+const argv = yargs
+  .option('profile', {
+    alias: 'p',
+    description: 'The config profile.',
+    type: 'string',
+  })
+  .help()
+  .alias('help', 'h')
+  .argv;
+
+let profile = argv.profile != null ? argv.profile : 'default';
 loadConfig();
+console.log(config);
 
 let logFile;
 if(config.logMessages) {
@@ -48,6 +57,7 @@ if(config.logMessages) {
 async function startBot() {
   log('Connecting to server...');
 
+  const credentials = getCredentials();
   bot = gg.createBot({
     username: credentials.email,
     password: credentials.password,
@@ -140,12 +150,12 @@ async function startBot() {
   
   // handle msg event
   bot.on('msg', (rank, username, message) => {
-    if(authorisedPlayers.includes(username)) {
+    if(config.authorisedPlayers.includes(username)) {
       // Authorised players
       const cmd = message.split(' ');
       switch(cmd[0]) {
         case 'logout':
-          authorisedPlayers = authorisedPlayers.filter(e => e !== username);
+          config.authorisedPlayers = config.authorisedPlayers.filter(e => e !== username);
           bot.sendMsg(username, 'Du bist nun abgemeldet.');
           break;
         case 'chat':
@@ -173,12 +183,12 @@ async function startBot() {
       if(message.startsWith('login')) {
         const cmd = message.split(' ');
         if(cmd.length == 2 && cmd[1] === credentials.controlPassword) {
-          authorisedPlayers.push(username);
+          config.push(username);
           bot.sendMsg(username, 'Hey, du bist nun angemeldet.');
         } else {
           bot.sendMsg(username, 'Das Passwort ist nicht korrekt!')
         }
-      } else if(msgResponse) {
+      } else if(config.msgResponseActive) {
         bot.sendMsg(username, config.msgResponse);
       }
     }
@@ -206,17 +216,17 @@ async function startBot() {
       return;
     }
 
-    log('[Chat] '+message.toAnsi(), !displayChat);
+    log('[Chat] '+message.toAnsi(), config.displayChat);
   });
 
   bot.on('tpa', (rank, name) => {
-    if(authorisedPlayers.includes(name)) {
+    if(config.authorisedPlayers.includes(name)) {
       bot.sendCommand('tpaccept '+name);
     }
   });
 
   bot.on('tpahere', (rank, name) => {
-    if(authorisedPlayers.includes(name)) {
+    if(config.authorisedPlayers.includes(name)) {
       bot.sendCommand('tpaccept '+name);
     }
   });
@@ -230,7 +240,7 @@ async function startBot() {
   });
 }
 
-function connectToCitybuild(citybuild) {
+function connectToCitybuild(citybuild: string) {
   return new Promise(async resolve => {
     const timeout = setTimeout(() => {
       resolve({success: false, error: 'Timed out while connecting to CityBuild.'});
@@ -275,14 +285,18 @@ function dropInventory() {
   });
 }
 
-function saveConfig() {
-  fs.writeFileSync('./config.json', JSON.stringify(config, null, 4));
-}
 function loadConfig() {
-  config = JSON.parse(fs.readFileSync('./config.json'));
-  displayChat = config.displayChat;
-  authorisedPlayers = config.authorisedPlayers;
-  msgResponse = config.msgResponse != '';
+  try {
+    const configFile = JSON.parse(fs.readFileSync('./config.json'));
+    config = Object.assign(configFile.default, configFile[profile]);
+    config.msgResponseActive = config.msgResponse != '';
+  } catch(err) {
+    log('Couldn\'t load config: '+err.message);
+  }
+}
+function getCredentials() {
+  const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
+  return credentialsFile[config.account];
 }
 
 startBot();
@@ -322,17 +336,17 @@ prompt.on('line', async msg => {
       
       case 'msgresponse':
         if(args.length == 1) {
-          log('Automatic response is '+(msgResponse ? 'on.' : 'off.'));
+          log('Automatic response is '+(config.msgResponseActive ? 'on.' : 'off.'));
         } else {
           if(args[1].toLowerCase() == 'on') {
             if(config.msgResponse != '') {
-              msgResponse = true;
+              config.msgResponseActive = true;
               log('Turned on automatic response.');
             } else {
               log('No response specified in config file.')
             }
           } else if(args[1].toLowerCase() == 'off') {
-            msgResponse = false;
+            config.msgResponseActive = false;
             log('Turned off automatic response.');
           } else {
             log('Usage: #msgresponse [on|off]');
@@ -341,8 +355,8 @@ prompt.on('line', async msg => {
         break;
 
       case 'togglechat':
-        displayChat = !displayChat;
-        log((displayChat ? 'Enabled' : 'Disabled')+' chat messages.');
+        config.displayChat = !config.displayChat;
+        log((config.displayChat ? 'Enabled' : 'Disabled')+' chat messages.');
         break;
 
       case 'onlinetime':
@@ -391,8 +405,8 @@ prompt.on('line', async msg => {
 
       case 'authorise':
         if(args.length == 2) {
-          if(!authorisedPlayers.includes(args[1])) {
-            authorisedPlayers.push(args[1]);
+          if(!config.authorisedPlayers.includes(args[1])) {
+            config.authorisedPlayers.push(args[1]);
             log('Authorised the player '+args[1]+'.');
           } else {
             log('The player is already authorised.');
@@ -404,8 +418,8 @@ prompt.on('line', async msg => {
 
       case 'unauthorise':
         if(args.length == 2) {
-          if(authorisedPlayers.includes(args[1])) {
-            authorisedPlayers = authorisedPlayers.filter(e => e !== args[1]);
+          if(config.authorisedPlayers.includes(args[1])) {
+            config.authorisedPlayers = config.authorisedPlayers.filter(e => e !== args[1]);
             log('Removed the player '+args[1]+'.');
           } else {
             log('The player is not authorised.');
@@ -416,7 +430,7 @@ prompt.on('line', async msg => {
         break;
 
       case 'listauthorised':
-        log('Authorised players: '+authorisedPlayers.join(', '));
+        log('Authorised players: '+config.authorisedPlayers.join(', '));
         break;
 
       case 'dropinv':
@@ -446,10 +460,10 @@ prompt.on('line', async msg => {
 });
 
 
-function log(message, onlyLogFile = false) {
+function log(message: string, display: Boolean = true) {
   const time = dateFormat(new Date(), 'HH:MM:ss');
   message = '['+time+'] '+message;
-  if(!onlyLogFile) console.log(message);
+  if(display) console.log(message);
   if(config.logMessages) fs.appendFileSync(logFile, message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')+'\n');
 }
 
