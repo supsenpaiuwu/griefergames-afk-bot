@@ -17,6 +17,7 @@ const prompt = require('serverline');
 const credentials = require('./credentials.json');
 
 const cityBuildConnectLimit = 3;
+const serverKickLimit = 3;
 
 let config;
 let msgResponse = false;
@@ -91,6 +92,7 @@ async function startBot() {
         }
       }
       if(connectErrorCount >= cityBuildConnectLimit) {
+        log('---------------------------------------------');
         log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
         exit();
       }
@@ -98,12 +100,13 @@ async function startBot() {
   });
   
   // handle kick event
+  const ChatMessage = require('prismarine-chat')(bot.client.version);
   bot.on('kicked', reason => {
-    reason = JSON.parse(reason);
-    log('Got kicked from the server: "'+reason.text+'".');
+    reason = new ChatMessage(JSON.parse(reason));
+    log('Got kicked from the server: '+reason.toAnsi());
 
-    switch(reason.text) {
-      case "§4Der Server wird heruntergefahren.":
+    switch(reason.toString()) {
+      case "Der Server wird heruntergefahren.":
         stopBot();
         if(!config.reconnectAfterRestart) {
           exit();
@@ -118,12 +121,14 @@ async function startBot() {
         break;
       default:
         serverKickCounter++;
-        if(serverKickCounter < 5) {
+        if(serverKickCounter < serverKickLimit) {
           stopBot();
           setTimeout(() => {
             startBot();
           }, 5000);
         } else {
+          log('---------------------------------------------');
+          log('Got kicked from the server '+serverKickLimit+' times.');
           exit();
         }
     }
@@ -194,12 +199,10 @@ async function startBot() {
 
     // remove broadcast messages
     if(message.toString() == '------------ [ News ] ------------') {
-      // begin/end of broadcast
       broadcastMessage = !broadcastMessage;
       return;
     }
     if(broadcastMessage) {
-      // text of broadcast
       return;
     }
 
