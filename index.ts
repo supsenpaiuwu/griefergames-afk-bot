@@ -377,7 +377,7 @@ prompt.on('line', async msg => {
         log('#unauthorise <name> - Unauthorise a player.');
         log('#listauthorised - List the authorised players.');
         log('#dropinv - Let the bot drop all items in its inventory.');
-        log('#listinv - Display the bots inventory.')
+        log('#listinv - Display the bots inventory.');
         log('#reloadconfig - Reload the configuration file.');
         break;
 
@@ -394,7 +394,7 @@ prompt.on('line', async msg => {
               config.msgResponseActive = true;
               log('Turned on automatic response.');
             } else {
-              log('No response specified in config file.')
+              log('No response specified in config file.');
             }
           } else if(args[1].toLowerCase() == 'off') {
             config.msgResponseActive = false;
@@ -411,7 +411,7 @@ prompt.on('line', async msg => {
         break;
 
       case 'onlinetime':
-        log(`Bot is running for ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min.`)
+        log(`Bot is running for ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min.`);
         break;
 
       case 'listplayers':
@@ -419,40 +419,44 @@ prompt.on('line', async msg => {
           const list = Object.keys(bot.client.players);
           log('Online players ('+list.length+'): '+list.join(', '));
         } else {
-          log('Bot is not connected to server.')
+          log('Bot is not connected to server.');
         }
         break;
 
       case 'citybuild':
-        if(args.length == 1) {
-          log('Your current CityBuild: '+currentCityBuild);
-        } else if(args.length == 2) {
-          if(!connectingToCityBuild) {
-            connectingToCityBuild = true;
-            let connectErrorCount = 0;
-            while(connectErrorCount < cityBuildConnectLimit && connectingToCityBuild) {
-              const result: any = await connectToCitybuild(args[1]);
-              if(result.success) {
-                connectingToCityBuild = false;
-                log('Connected to CityBuild.');
-              } else {
-                connectErrorCount++;
-                if(result.error.startsWith('There is no CityBuild named')) {
-                  log(result.error);
+        if(bot != null && bot.isOnline()) {
+          if(args.length == 1) {
+            log('Your current CityBuild: '+currentCityBuild);
+          } else if(args.length == 2) {
+            if(!connectingToCityBuild) {
+              connectingToCityBuild = true;
+              let connectErrorCount = 0;
+              while(connectErrorCount < cityBuildConnectLimit && connectingToCityBuild) {
+                const result: any = await connectToCitybuild(args[1]);
+                if(result.success) {
                   connectingToCityBuild = false;
+                  log('Connected to CityBuild.');
                 } else {
-                  log('Couldn\'t connect to CityBuild: '+result.error);
+                  connectErrorCount++;
+                  if(result.error.startsWith('There is no CityBuild named')) {
+                    log(result.error);
+                    connectingToCityBuild = false;
+                  } else {
+                    log('Couldn\'t connect to CityBuild: '+result.error);
+                  }
                 }
               }
-            }
-            if(connectErrorCount >= cityBuildConnectLimit) {
-              log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+              if(connectErrorCount >= cityBuildConnectLimit) {
+                log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+              }
+            } else {
+              log('Already connecting to citybuild. Please wait...');
             }
           } else {
-            log('Already connecting to citybuild. Please wait...');
+            log('Usage: #citybuild [cb name]');
           }
         } else {
-          log('Usage: #citybuild [cb name]');
+          log('Bot is not connected to server.');
         }
         break;
 
@@ -487,14 +491,26 @@ prompt.on('line', async msg => {
         break;
 
       case 'dropinv':
-        dropInventory();
+        if(bot != null && bot.isOnline()) {
+          dropInventory();
+        } else {
+          log('Bot is not connected to server.');
+        }
         break;
         
       case 'listinv':
-        log('Inventory:');
-        bot.client.inventory.items().forEach(item => {
-          log(`Slot ${item.slot} - ${item.count}x ${item.displayName} (${item.type}:${item.metadata})`);
-        });
+        if(bot != null && bot.isOnline()) {
+          if(bot.client.inventory.items().length > 0) {
+            log('Inventory:');
+            bot.client.inventory.items().forEach(item => {
+              log(`Slot ${item.slot} - ${item.count}x ${item.displayName} (${item.type}:${item.metadata})`);
+            });
+          } else {
+            log('Bots inventory is empty.');
+          }
+        } else {
+          log('Bot is not connected to server.')
+        }
         break;
 
       case 'reloadconfig':
