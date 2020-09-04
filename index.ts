@@ -62,20 +62,32 @@ if(config.logMessages) {
 async function startBot() {
   log('Connecting to server...');
 
-  bot = gg.createBot({
-    username: credentials.email,
-    password: credentials.password,
+  const botOptions: any = {
     cacheSessions: true,
     logMessages: false,
     solveAfkChallenge: true,
     setPortalTimeout: false
-  });
+  };
+
+  if(credentials.mcLeaksToken) {
+    botOptions.mcLeaksToken = credentials.mcLeaksToken;
+  } else {
+    botOptions.username = credentials.email;
+    botOptions.password = credentials.password;
+  }
+
+  bot = gg.createBot(botOptions);
   
   try {
     await bot.init();
   } catch(err) {
-    log('An error occurred: '+err.message);
-    exit();
+    if(err.message.startsWith('Invalid credentials.')) {
+      log('Error while logging in: '+err.message);
+      exit();
+      return;
+    } else {
+      throw err;
+    }
   }
   
   bot.on('ready', async () => {
@@ -120,6 +132,11 @@ async function startBot() {
     reason = new ChatMessage(JSON.parse(reason));
     log('Got kicked from the server: '+reason.toAnsi());
 
+    if(credentials.mcLeaksToken) {
+      exit();
+      return;
+    }
+
     switch(reason.toString()) {
       case "Der Server wird heruntergefahren.":
         stopBot();
@@ -151,6 +168,12 @@ async function startBot() {
 
   bot.on('end', () => {
     log('Bot timed out.');
+
+    if(credentials.mcLeaksToken) {
+      exit();
+      return;
+    }
+
     serverKickCounter++;
     if(serverKickCounter < serverKickLimit) {
       stopBot();
@@ -246,6 +269,15 @@ async function startBot() {
   bot.on('scoreboardServer', server => {
     currentCityBuild = server;
   });
+
+  bot.on('error', err => {
+    if(err.message.startsWith('MCLeaks')) {
+      log('Error while reedeming token: '+err.message);
+      exit();
+    } else {
+      throw err;
+    }
+  });
 }
 
 function connectToCitybuild(citybuild: string) {
@@ -277,7 +309,7 @@ function stopBot() {
 }
 
 function exit() {
-  log(`Stopping bot... (Online time: ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min)`);
+  log(`Stopping bot... (Online time: ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min ${credentials.mcLeaksToken ? ' | Token: '+credentials.mcLeaksToken : ''})`);
   if(bot != null) bot.clean();
   setTimeout(() => process.exit(), 100);
 }
@@ -305,9 +337,15 @@ function loadConfig() {
 function loadCredentials() {
   const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
   credentials = credentialsFile[config.account];
+  if(config.account == 'mcleaks') credentials.mcLeaksToken = '';
 }
 
-startBot();
+
+if(credentials.mcLeaksToken == '') {
+  log('Please create an token on https://mcleaks.net/get and enter it here.');
+} else {
+  startBot();
+}
 
 // command prompt
 prompt.init();
@@ -317,6 +355,11 @@ prompt.on('SIGINT', () => {
   exit();
 });
 prompt.on('line', async msg => {
+  if(credentials.mcLeaksToken == '') {
+    credentials.mcLeaksToken = msg;
+    startBot();
+    return;
+  }
   if(msg.trim().startsWith('#')) {
     // bot commands
     const args = msg.trim().substr(1).split(' ');
@@ -336,7 +379,6 @@ prompt.on('line', async msg => {
         log('#dropinv - Let the bot drop all items in its inventory.');
         log('#listinv - Display the bots inventory.')
         log('#reloadconfig - Reload the configuration file.');
-        log('#name - Displays the username of the bot.')
         break;
 
       case 'stop':
