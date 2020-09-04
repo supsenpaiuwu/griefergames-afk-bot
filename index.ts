@@ -21,7 +21,7 @@ const prompt = require('serverline');
 const yargs = require('yargs');
 
 const cityBuildConnectLimit = 3;
-const serverKickLimit = 3;
+const serverKickLimit = 5;
 
 let config;
 let credentials;
@@ -79,6 +79,7 @@ async function startBot() {
   }
   
   bot.on('ready', async () => {
+    prompt.setPrompt(bot.client.username+'> ');
     log('Connected as '+bot.client.username+'. Trying to connect to CityBuild...');
 
     // count time bot is on the server in minutes
@@ -148,8 +149,19 @@ async function startBot() {
     }
   });
 
-  bot.end('end', () => {
-    console.log('DEBUG: Session ended.');
+  bot.on('end', () => {
+    log('Bot timed out.');
+    serverKickCounter++;
+    if(serverKickCounter < serverKickLimit) {
+      stopBot();
+      setTimeout(() => {
+        startBot();
+      }, 5000);
+    } else {
+      log('---------------------------------------------');
+      log('Got kicked from the server '+serverKickLimit+' times.');
+      exit();
+    }
   });
   
   // handle msg event
@@ -200,13 +212,9 @@ async function startBot() {
   
   // handle chat message event
   let broadcastMessage = false;
-  bot.client.on('message', message => {
-    // remove messages from ignore list
-    for(let i=0; i<config.ignoreMessages.length; i++) {
-      if(message.toString().startsWith(config.ignoreMessages[i])) {
-        return;
-      }
-    }
+  bot.on('message', (message, position) => {
+    // removes other than chat messages
+    if(position == 2) return;
 
     // remove empty lines
     if(message.toString().trim() == '') return;
@@ -235,12 +243,8 @@ async function startBot() {
     }
   });
 
-  bot.client._client.on('packet', (data, metadata) => {
-    if (metadata.name == 'scoreboard_team') {
-      if(data.team == 'server' && data.prefix != null) {
-        currentCityBuild = data.prefix;
-      }
-    }
+  bot.on('scoreboardServer', server => {
+    currentCityBuild = server;
   });
 }
 
@@ -332,6 +336,7 @@ prompt.on('line', async msg => {
         log('#dropinv - Let the bot drop all items in its inventory.');
         log('#listinv - Display the bots inventory.')
         log('#reloadconfig - Reload the configuration file.');
+        log('#name - Displays the username of the bot.')
         break;
 
       case 'stop':
