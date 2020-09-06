@@ -48,14 +48,14 @@ loadCredentials();
 
 let logFile;
 if(config.logMessages) {
-  if(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'.log')) {
+  if(fs.existsSync(`logs/${dateFormat('dd-mm-yyyy')}.log`)) {
     let counter = 1;
-    while(fs.existsSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log')) {
+    while(fs.existsSync(`logs/${dateFormat('dd-mm-yyyy')}-${counter}.log`)) {
       counter++;
     }
-    logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'-'+counter+'.log', 'a');
+    logFile = fs.openSync(`logs/${dateFormat('dd-mm-yyyy')}-${counter}.log`, 'a');
   } else {
-    logFile = fs.openSync('logs/'+dateFormat('dd-mm-yyyy')+'.log', 'a');
+    logFile = fs.openSync(`logs/${dateFormat('dd-mm-yyyy')}.log`, 'a');
   }
 }
 
@@ -105,7 +105,7 @@ async function startBot() {
         const result: any = await connectToCitybuild(config.citybuild);
         if(result.success) {
           connectingToCityBuild = false;
-          log('Connected to CityBuild.');
+          log(`Connected to CityBuild ${currentCityBuild.replace('CB', '')}.`);
           // wait 2s until fully connected
           setTimeout(() => {
             // execute commands
@@ -167,7 +167,7 @@ async function startBot() {
   });
 
   bot.on('end', () => {
-    log('Bot timed out.');
+    log('Got kicked from the server: Connection lost.');
 
     if(credentials.mcLeaksToken) {
       exit();
@@ -435,7 +435,7 @@ prompt.on('line', async msg => {
                 const result: any = await connectToCitybuild(args[1]);
                 if(result.success) {
                   connectingToCityBuild = false;
-                  log('Connected to CityBuild.');
+                  log(`Connected to CityBuild ${currentCityBuild.replace('CB', '')}.`);
                 } else {
                   connectErrorCount++;
                   if(result.error.startsWith('There is no CityBuild named')) {
