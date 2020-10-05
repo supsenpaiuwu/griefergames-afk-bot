@@ -19,6 +19,7 @@ const gg = require('griefergames');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
 const yargs = require('yargs');
+const Vec3 = require('vec3').Vec3;
 
 const cityBuildConnectLimit = 3;
 const serverKickLimit = 5;
@@ -31,6 +32,7 @@ let connectingToCityBuild = false;
 let currentCityBuild = 'Offline';
 let serverKickCounter = 0;
 let onlineTime = 0;
+let treefarmPosition = new Vec3(2515, 65, 2662);
 
 const argv = yargs
   .option('profile', {
@@ -48,6 +50,9 @@ loadCredentials();
 
 let logFile;
 if(config.logMessages) {
+  if(!fs.existsSync('logs/')) {
+    fs.mkdirSync('logs/');
+  }
   if(fs.existsSync(`logs/${dateFormat('dd-mm-yyyy')}.log`)) {
     let counter = 1;
     while(fs.existsSync(`logs/${dateFormat('dd-mm-yyyy')}-${counter}.log`)) {
@@ -278,6 +283,18 @@ async function startBot() {
       throw err;
     }
   });
+
+  bot.client.on('blockUpdate', (oldBlock, newBlock) => {
+    if(treefarmPosition != null) {
+      if(newBlock.position.equals(treefarmPosition) && newBlock.type == 0) {
+        setTimeout(() => {
+          const dirtBlock = bot.client.blockAt(newBlock.position.offset(0, -1, 0), false);
+          bot.client.setQuickBarSlot(0);
+          bot.client.placeBlock(dirtBlock, new Vec3(0, 1, 0));
+        }, 100);
+      }
+    }
+  });
 }
 
 function connectToCitybuild(citybuild: string) {
@@ -294,7 +311,6 @@ function connectToCitybuild(citybuild: string) {
       resolve({success: false, error: err.message});
     }
   });
-  
 }
 
 function stopBot() {
@@ -350,7 +366,7 @@ if(credentials.mcLeaksToken == '') {
 // command prompt
 prompt.init();
 prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise',
-  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig']);
+  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig', '#treefarm']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -372,13 +388,14 @@ prompt.on('line', async msg => {
         log('#togglechat - Show or hide the chat.');
         log('#onlinetime - Show the online time of the bot.');
         log('#listplayers - List the currently online players.');
-        log('#citybuild [cb name] - Change CityBuild.');
+        log('#citybuild [cb name] [join command] - Change CityBuild.');
         log('#authorise <name> - Authorise a player to execute bot commands.');
         log('#unauthorise <name> - Unauthorise a player.');
         log('#listauthorised - List the authorised players.');
         log('#dropinv - Let the bot drop all items in its inventory.');
         log('#listinv - Display the bots inventory.');
         log('#reloadconfig - Reload the configuration file.');
+        log('#treefarm <x|off> <y> <z> - Automatically place new saplings.');
         break;
 
       case 'stop':
@@ -427,7 +444,7 @@ prompt.on('line', async msg => {
         if(bot != null && bot.isOnline()) {
           if(args.length == 1) {
             log('Your current CityBuild: '+currentCityBuild);
-          } else if(args.length == 2) {
+          } else if(args.length >= 2) {
             if(!connectingToCityBuild) {
               connectingToCityBuild = true;
               let connectErrorCount = 0;
@@ -436,6 +453,17 @@ prompt.on('line', async msg => {
                 if(result.success) {
                   connectingToCityBuild = false;
                   log(`Connected to CityBuild ${currentCityBuild.replace('CB', '')}.`);
+
+                  // execute command if defined
+                  if(args.length >= 3) {
+                    setTimeout(() => {
+                      let command = args.splice(2).join(' ');
+                      if(command.startsWith('/')) {
+                        command = command.replace('/', '');
+                      }
+                      bot.sendCommand(command);
+                    }, 2000);
+                  }
                 } else {
                   connectErrorCount++;
                   if(result.error.startsWith('There is no CityBuild named')) {
@@ -516,6 +544,36 @@ prompt.on('line', async msg => {
       case 'reloadconfig':
         loadConfig();
         log('Configuration reloaded.');
+        break;
+
+      case 'treefarm':
+        if(bot != null && bot.isOnline()) {
+          if(args.length == 4) {
+            const x = parseInt(args[1]);
+            const y = parseInt(args[2]);
+            const z = parseInt(args[3]);
+            if(x != NaN && y != NaN && z != NaN) {
+              treefarmPosition = new Vec3(x, y, z);
+              const dirtBlock = bot.client.blockAt(treefarmPosition.offset(0, -1, 0), false);
+              if(dirtBlock != null) {
+                bot.client.setQuickBarSlot(0);
+                bot.client.placeBlock(dirtBlock, new Vec3(0, 1, 0));
+                log('Started treefarm.');
+              } else {
+                log('Position not reachable.');
+              }
+            } else {
+              log('Invalid position.');
+            }
+          } else if(args.length == 2 && args[1] == 'off') {
+            treefarmPosition = null;
+            log('Stopped treefarm.');
+          } else {
+            log('Usage: #treefarm <x|off> <y> <z>');
+          }
+        } else {
+          log('Bot is not connected to server.');
+        }
         break;
 
       default:
