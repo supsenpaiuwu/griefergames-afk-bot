@@ -1,38 +1,7 @@
 export {};
 
-const fs = require('fs');
-
-// the boundingBox of nether portals and carpets have to be changed to empty
-const minecraft_data_blocks = require('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json');
-let changed = false;
-for(let i=0; i<minecraft_data_blocks.length; i++) {
-  if(minecraft_data_blocks[i].id == 90 || minecraft_data_blocks[i].id == 171) {
-    if(minecraft_data_blocks[i].boundingBox != 'empty') {
-      minecraft_data_blocks[i].boundingBox = 'empty';
-      changed = true;
-    }
-  }
-}
-if(changed) fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json', JSON.stringify(minecraft_data_blocks, null, 4));
-
-const gg = require('griefergames');
-const dateFormat = require('dateformat');
-const prompt = require('serverline');
 const yargs = require('yargs');
-const Vec3 = require('vec3').Vec3;
-
-const cityBuildConnectLimit = 3;
-const serverKickLimit = 5;
-
 let config = require('./config.json');
-let credentials;
-let bot;
-let onlineTimeInterval;
-let connectingToCityBuild = false;
-let currentCityBuild = 'Offline';
-let serverKickCounter = 0;
-let onlineTime = 0;
-let treefarmPosition = new Vec3(2515, 65, 2662);
 
 const argv = yargs
   .option('profile', {
@@ -65,6 +34,38 @@ if(argv.profile && config[argv.profile] == null) {
   console.log(`Profile ${argv.profile} does not exist.`);
   process.exit(1);
 }
+
+const fs = require('fs');
+
+// the boundingBox of nether portals and carpets have to be changed to empty
+const minecraft_data_blocks = require('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json');
+let changed = false;
+for(let i=0; i<minecraft_data_blocks.length; i++) {
+  if(minecraft_data_blocks[i].id == 90 || minecraft_data_blocks[i].id == 171) {
+    if(minecraft_data_blocks[i].boundingBox != 'empty') {
+      minecraft_data_blocks[i].boundingBox = 'empty';
+      changed = true;
+    }
+  }
+}
+if(changed) fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/pc/1.8/blocks.json', JSON.stringify(minecraft_data_blocks, null, 4));
+
+const gg = require('griefergames');
+const dateFormat = require('dateformat');
+const prompt = require('serverline');
+const Vec3 = require('vec3').Vec3;
+
+const cityBuildConnectLimit = 3;
+const serverKickLimit = 5;
+
+let credentials;
+let bot;
+let onlineTimeInterval;
+let connectingToCityBuild = false;
+let currentCityBuild = 'Offline';
+let serverKickCounter = 0;
+let onlineTime = 0;
+let treefarmPosition = new Vec3(2515, 65, 2662);
 
 let profile = argv.profile != null ? argv.profile : 'default';
 loadConfig();
