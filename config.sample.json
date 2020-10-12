@@ -1,0 +1,29 @@
+{
+    "default": {
+        "citybuild": "cb3",
+        "commands": [
+            "p h Neocraftr",
+            "nick AFK_Neocraftr"
+        ],
+        "reconnectAfterRestart": true,
+        "logMessages": true,
+        "displayChat": true,
+        "msgResponse": "",
+        "authorisedPlayers": [
+            "Neocraftr"
+        ],
+        "account": "account-1"
+    },
+    "sample-account-2": {
+        "citybuild": "evil",
+        "commands": [
+            "p h Neocraftr 6"
+        ],
+        "reconnectAfterRestart": false,
+        "account": "account-2"
+    },
+    "sample-account-mcleaks": {
+        "citybuild": "extreme",
+        "account": "mcleaks"
+    }
+}
