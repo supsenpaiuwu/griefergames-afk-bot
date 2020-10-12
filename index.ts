@@ -24,7 +24,7 @@ const Vec3 = require('vec3').Vec3;
 const cityBuildConnectLimit = 3;
 const serverKickLimit = 5;
 
-let config;
+let config = require('./config.json');
 let credentials;
 let bot;
 let onlineTimeInterval;
@@ -38,11 +38,33 @@ const argv = yargs
   .option('profile', {
     alias: 'p',
     description: 'The config profile.',
-    type: 'string',
+    type: 'string'
+  })
+  .option('list', {
+    alias: 'l',
+    description: 'List available config profiles.'
   })
   .help()
   .alias('help', 'h')
   .argv;
+
+if(argv.list) {
+  if(Object.keys(config).length == 1) {
+    console.log('You havent created any config profiles.');
+  } else {
+    console.log('Config profiles:');
+    Object.keys(config).forEach(name => {
+      if(name == 'default') return;
+      console.log('- '+name);
+    });
+  }
+  process.exit(0);
+}
+
+if(argv.profile && config[argv.profile] == null) {
+  console.log(`Profile ${argv.profile} does not exist.`);
+  process.exit(1);
+}
 
 let profile = argv.profile != null ? argv.profile : 'default';
 loadConfig();
