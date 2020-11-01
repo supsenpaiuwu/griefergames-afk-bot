@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
-        "target": "esnext",
+        "target": "ESNext",
+        "module": "commonjs",
         "removeComments": true
     },
     "include": [
