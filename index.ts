@@ -31,6 +31,7 @@ let connectingToCityBuild = false;
 let currentCityBuild = 'Offline';
 let serverKickCounter = 0;
 let onlineTime = 0;
+let income = 0;
 
 const argv = yargs
   .option('profile', {
@@ -266,6 +267,14 @@ async function startBot() {
     }
   });
 
+  bot.on('pay', (rank, username, amount, text, codedText) => {
+    income += amount;
+  });
+
+  bot.on('moneydrop', amount => {
+    income += amount;
+  });
+
   bot.on('scoreboardServer', server => {
     currentCityBuild = server;
   });
@@ -350,7 +359,7 @@ if(credentials.mcLeaksToken == '') {
 // command prompt
 prompt.init();
 prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise',
-  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig']);
+  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig', '#income']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -379,6 +388,7 @@ prompt.on('line', async msg => {
         log('#dropinv - Let the bot drop all items in its inventory.');
         log('#listinv - Display the bots inventory.');
         log('#reloadconfig - Reload the configuration file.');
+        log('#income - Show income since login.');
         break;
 
       case 'stop':
@@ -516,6 +526,10 @@ prompt.on('line', async msg => {
       case 'reloadconfig':
         loadConfig();
         log('Configuration reloaded.');
+        break;
+
+      case 'income':
+        log('Income since login: $'+income);
         break;
 
       default:
