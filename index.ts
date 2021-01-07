@@ -95,15 +95,11 @@ async function startBot() {
     cacheSessions: true,
     logMessages: false,
     solveAfkChallenge: true,
-    setPortalTimeout: false
+    setPortalTimeout: false,
+    auth: credentials.authType,
+    username: credentials.email,
+    password: credentials.password
   };
-
-  if(credentials.mcLeaksToken) {
-    botOptions.mcLeaksToken = credentials.mcLeaksToken;
-  } else {
-    botOptions.username = credentials.email;
-    botOptions.password = credentials.password;
-  }
 
   bot = gg.createBot(botOptions);
   
@@ -161,7 +157,7 @@ async function startBot() {
     reason = new ChatMessage(JSON.parse(reason));
     log('Got kicked from the server: '+reason.toAnsi());
 
-    if(credentials.mcLeaksToken) {
+    if(credentials.authType == 'mcleaks') {
       exit();
       return;
     }
@@ -198,7 +194,7 @@ async function startBot() {
   bot.on('end', () => {
     log('Got kicked from the server: Connection lost.');
 
-    if(credentials.mcLeaksToken) {
+    if(credentials.authType == 'mcleaks') {
       exit();
       return;
     }
@@ -357,12 +353,12 @@ function stopBot() {
 }
 
 function exit() {
-  log(`Stopping bot... (Online time: ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min ${credentials.mcLeaksToken ? ' | Token: '+credentials.mcLeaksToken : ''})`);
+  log(`Stopping bot... (Online time: ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min${credentials.authType == 'mcleaks' ? ' | Token: '+credentials.password : ''})`);
   if(bot != null) bot.clean();
   setTimeout(() => process.exit(), 100);
 }
 
-function dropInventory() {
+function dropInventory(): Promise<void> {
   return new Promise(async resolve => {
     await asyncForEach(bot.client.inventory.items(), async item => {
         await new Promise(resolve1 => {
@@ -385,11 +381,10 @@ function loadConfig() {
 function loadCredentials() {
   const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
   credentials = credentialsFile[config.account];
-  if(config.account == 'mcleaks') credentials.mcLeaksToken = '';
 }
 
 
-if(credentials.mcLeaksToken == '') {
+if(credentials.authType == 'mcleaks') {
   log('Please create an token on https://mcleaks.net/get and enter it here.');
 } else {
   startBot();
@@ -403,8 +398,8 @@ prompt.on('SIGINT', () => {
   exit();
 });
 prompt.on('line', async msg => {
-  if(credentials.mcLeaksToken == '') {
-    credentials.mcLeaksToken = msg;
+  if(credentials.authType == 'mcleaks' && !credentials.password) {
+    credentials.password = msg;
     startBot();
     return;
   }
