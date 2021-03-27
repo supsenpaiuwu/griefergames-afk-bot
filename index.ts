@@ -66,7 +66,6 @@ let currentCityBuild = 'Offline';
 let serverKickCounter = 0;
 let onlineTime = 0;
 let income = 0;
-let treefarmPosition = new Vec3(2515, 65, 2662);
 
 let profile = argv.profile != null ? argv.profile : 'default';
 loadConfig();
@@ -311,18 +310,6 @@ async function startBot() {
       throw err;
     }
   });
-
-  bot.client.on('blockUpdate', (oldBlock, newBlock) => {
-    if(treefarmPosition != null) {
-      if(newBlock.position.equals(treefarmPosition) && newBlock.type == 0) {
-        setTimeout(() => {
-          const dirtBlock = bot.client.blockAt(newBlock.position.offset(0, -1, 0), false);
-          bot.client.setQuickBarSlot(0);
-          bot.client.placeBlock(dirtBlock, new Vec3(0, 1, 0));
-        }, 100);
-      }
-    }
-  });
 }
 
 function connectToCitybuild(citybuild: string) {
@@ -393,7 +380,7 @@ if(credentials.authType == 'mcleaks') {
 // command prompt
 prompt.init();
 prompt.setCompletion(['#help', '#stop', '#msgresponse', '#togglechat', '#onlinetime', '#listplayers', '#citybuild', '#authorise', '#unauthorise',
-  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig', '#treefarm', '#income']);
+  '#listauthorised', '#dropinv', '#listinv', '#reloadconfig', '#income']);
 prompt.on('SIGINT', () => {
   exit();
 });
@@ -422,7 +409,6 @@ prompt.on('line', async msg => {
         log('#dropinv - Let the bot drop all items in its inventory.');
         log('#listinv - Display the bots inventory.');
         log('#reloadconfig - Reload the configuration file.');
-        log('#treefarm <x|off> <y> <z> - Automatically place new saplings.');
         log('#income - Show income since login.');
         break;
 
@@ -572,36 +558,6 @@ prompt.on('line', async msg => {
       case 'reloadconfig':
         loadConfig();
         log('Configuration reloaded.');
-        break;
-
-      case 'treefarm':
-        if(bot != null && bot.isOnline()) {
-          if(args.length == 4) {
-            const x = parseInt(args[1]);
-            const y = parseInt(args[2]);
-            const z = parseInt(args[3]);
-            if(x != NaN && y != NaN && z != NaN) {
-              treefarmPosition = new Vec3(x, y, z);
-              const dirtBlock = bot.client.blockAt(treefarmPosition.offset(0, -1, 0), false);
-              if(dirtBlock != null) {
-                bot.client.setQuickBarSlot(0);
-                bot.client.placeBlock(dirtBlock, new Vec3(0, 1, 0));
-                log('Started treefarm.');
-              } else {
-                log('Position not reachable.');
-              }
-            } else {
-              log('Invalid position.');
-            }
-          } else if(args.length == 2 && args[1] == 'off') {
-            treefarmPosition = null;
-            log('Stopped treefarm.');
-          } else {
-            log('Usage: #treefarm <x|off> <y> <z>');
-          }
-        } else {
-          log('Bot is not connected to server.');
-        }
         break;
 
       case 'income':
