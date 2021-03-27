@@ -2,22 +2,22 @@
     "default": {
         "citybuild": "cb3",
         "commands": [
-            "p h Neocraftr",
-            "nick AFK_Neocraftr"
+            "p h",
+            "nick Ich_Bin_AFK"
         ],
         "reconnectAfterRestart": true,
         "logMessages": true,
         "displayChat": true,
         "msgResponse": "",
         "authorisedPlayers": [
-            "Neocraftr"
+            "Steve"
         ],
         "account": "account-1"
     },
     "sample-account-2": {
         "citybuild": "evil",
         "commands": [
-            "p h Neocraftr 6"
+            "p h 6"
         ],
         "reconnectAfterRestart": false,
         "account": "account-2"
