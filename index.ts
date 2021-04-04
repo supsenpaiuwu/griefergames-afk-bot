@@ -301,6 +301,34 @@ async function startBot() {
   bot.on('scoreboardServer', server => {
     currentCityBuild = server;
   });
+  
+  bot.client._client.on('packet', (data, metadata) => {
+    if(metadata.name == 'custom_payload' && data.channel == 'mysterymod:mm') {
+      const dataBuffer = data.data;
+
+      let i = 0;
+      let j = 0;
+      let b0;
+
+      do {
+          b0 = dataBuffer.readInt8();
+          i |= (b0 & 127) << j++ * 7;
+          if (j > 5) {
+              return;
+          }
+      } while((b0 & 128) == 128);
+
+      const key = dataBuffer.slice(0, i+1).toString();
+      const message = dataBuffer.slice(i+1).toString();
+
+      if(key.includes('mysterymod_user_check')) {
+        bot.client._client.write('custom_payload', {
+          channel: 'mysterymod:mm',
+          data: Buffer.from(message)
+        });
+      }
+    }
+  });
 
   bot.on('error', err => {
     if(err.message.startsWith('MCLeaks')) {
