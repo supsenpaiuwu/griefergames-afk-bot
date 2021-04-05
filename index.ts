@@ -53,11 +53,11 @@ if(changed) fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/
 const gg = require('griefergames');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
+const { Webhook } = require('discord-webhook-node');
 
 const cityBuildConnectLimit = 3;
 const serverKickLimit = 5;
 
-let credentials;
 let bot;
 let onlineTimeInterval;
 let connectingToCityBuild = false;
@@ -68,7 +68,8 @@ let income = 0;
 
 let profile = argv.profile != null ? argv.profile : 'default';
 loadConfig();
-loadCredentials();
+const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
+let credentials = credentialsFile.minecraftAccounts[config.account];
 
 let logFile;
 if(config.logMessages) {
@@ -86,8 +87,16 @@ if(config.logMessages) {
   }
 }
 
+let discord;
+if(credentialsFile.discordWebhookUrl != null && credentialsFile.discordWebhookUrl != '') {
+  discord = new Webhook({
+    url: credentialsFile.discordWebhookUrl,
+    throwErrors: false,
+  });
+}
+
 async function startBot() {
-  log('Connecting to server...');
+  await log('info', 'Connecting to server...');
 
   const botOptions: any = {
     cacheSessions: true,
@@ -105,7 +114,7 @@ async function startBot() {
     await bot.init();
   } catch(err) {
     if(err.message.startsWith('Invalid credentials.')) {
-      log('Error while logging in: '+err.message);
+      await log('error', 'Error while logging in: '+err.message);
       exit();
       return;
     } else {
@@ -115,7 +124,7 @@ async function startBot() {
   
   bot.on('ready', async () => {
     prompt.setPrompt(bot.client.username+'> ');
-    log('Connected as '+bot.client.username+'. Trying to connect to CityBuild...');
+    await log('info', 'Connected as '+bot.client.username+'.');
 
     // count time bot is on the server in minutes
     onlineTimeInterval = setInterval(() => onlineTime++, 60000);
@@ -125,10 +134,11 @@ async function startBot() {
       connectingToCityBuild = true;
       let connectErrorCount = 0;
       while(connectErrorCount < cityBuildConnectLimit && connectingToCityBuild) {
+        await log('info', `Trying to connect to CityBuild ${config.citybuild.toLowerCase().replace('cb', '')}... (${connectErrorCount+1})`);
         const result: any = await connectToCitybuild(config.citybuild);
         if(result.success) {
           connectingToCityBuild = false;
-          log(`Connected to CityBuild ${currentCityBuild.replace('CB', '')}.`);
+          await log('info', 'Connected to CityBuild.');
           // wait 2s until fully connected
           setTimeout(() => {
             // execute commands
@@ -138,12 +148,11 @@ async function startBot() {
           }, 2000);
         } else {
           connectErrorCount++;
-          log('Couldn\'t connect to CityBuild: '+result.error);
+          await log('error', 'Couldn\'t connect to CityBuild: '+result.error);
         }
       }
       if(connectErrorCount >= cityBuildConnectLimit) {
-        log('---------------------------------------------');
-        log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+        await log('info', 'CityBuild connection limit exceeded.');
         exit();
       }
     }
@@ -151,9 +160,9 @@ async function startBot() {
   
   // handle kick event
   const ChatMessage = require('prismarine-chat')(bot.client.version);
-  bot.on('kicked', reason => {
+  bot.on('kicked', async reason => {
     reason = new ChatMessage(JSON.parse(reason));
-    log('Got kicked from the server: '+reason.toAnsi());
+    await log('error', 'Got kicked from the server: '+reason.toAnsi());
 
     if(credentials.authType == 'mcleaks') {
       exit();
@@ -182,15 +191,14 @@ async function startBot() {
             startBot();
           }, 5000);
         } else {
-          log('---------------------------------------------');
-          log('Got kicked from the server '+serverKickLimit+' times.');
+          await log('error', 'Server connection limit exceeded.');
           exit();
         }
     }
   });
 
-  bot.on('end', () => {
-    log('Got kicked from the server: Connection lost.');
+  bot.on('end', async () => {
+    await log('error', 'Got kicked from the server: Connection lost.');
 
     if(credentials.authType == 'mcleaks') {
       exit();
@@ -204,8 +212,7 @@ async function startBot() {
         startBot();
       }, 5000);
     } else {
-      log('---------------------------------------------');
-      log('Got kicked from the server '+serverKickLimit+' times.');
+      await log('error', 'Server connection limit exceeded.');
       exit();
     }
   });
@@ -258,7 +265,7 @@ async function startBot() {
   
   // handle chat message event
   let broadcastMessage = false;
-  bot.on('message', (message, position) => {
+  bot.on('message', async (message, position) => {
     // removes other than chat messages
     if(position == 2) return;
 
@@ -274,7 +281,7 @@ async function startBot() {
       return;
     }
 
-    log('[Chat] '+message.toAnsi(), config.displayChat);
+    await log('chat', message.toAnsi());
   });
 
   bot.on('tpa', (rank, name) => {
@@ -289,12 +296,14 @@ async function startBot() {
     }
   });
 
-  bot.on('pay', (rank, username, amount, text, codedText) => {
+  bot.on('pay', async (rank, username, amount, text, codedText) => {
     income += amount;
+    await log('info', `Received $${amount} from ${username}.`);
   });
 
-  bot.on('moneydrop', amount => {
+  bot.on('moneydrop', async amount => {
     income += amount;
+    await log('info', `Received $${amount} moneydrop.`);
   });
 
   bot.on('scoreboardServer', server => {
@@ -329,9 +338,9 @@ async function startBot() {
     }
   });
 
-  bot.on('error', err => {
+  bot.on('error', async err => {
     if(err.message.startsWith('MCLeaks')) {
-      log('Error while reedeming token: '+err.message);
+      await log('error', 'Error while reedeming token: '+err.message);
       exit();
     } else {
       throw err;
@@ -366,10 +375,10 @@ function stopBot() {
   clearInterval(onlineTimeInterval);
 }
 
-function exit() {
-  log(`Stopping bot... (Online time: ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min${credentials.authType == 'mcleaks' ? ' | Token: '+credentials.password : ''})`);
+async function exit() {
+  await log('info', `Stopping bot... (Online time: ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min${credentials.authType == 'mcleaks' ? ' | Token: '+credentials.password : ''})`);
   if(bot != null) bot.clean();
-  setTimeout(() => process.exit(), 100);
+  setTimeout(() => process.exit(), 1000);
 }
 
 function dropInventory(): Promise<void> {
@@ -383,26 +392,23 @@ function dropInventory(): Promise<void> {
   });
 }
 
-function loadConfig() {
+async function loadConfig() {
   try {
     const configFile = JSON.parse(fs.readFileSync('./config.json'));
     config = Object.assign(configFile.default, configFile[profile]);
     config.msgResponseActive = config.msgResponse != '';
   } catch(err) {
-    log('Couldn\'t load config: '+err.message);
+    await log('error', 'Couldn\'t load config: '+err.message);
   }
 }
-function loadCredentials() {
-  const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
-  credentials = credentialsFile.minecraftAccounts[config.account];
-}
 
-
-if(credentials.authType == 'mcleaks') {
-  log('Please create an token on https://mcleaks.net/get and enter it here.');
-} else {
-  startBot();
-}
+(async () => {
+  if(credentials.authType == 'mcleaks') {
+    await log('cmd', 'Please create an token on https://mcleaks.net/get and enter it here.');
+  } else {
+    startBot();
+  }
+})();
 
 // command prompt
 prompt.init();
@@ -422,21 +428,21 @@ prompt.on('line', async msg => {
     const args = msg.trim().substr(1).split(' ');
     switch(args[0].toLowerCase()) {
       case 'help':
-        log('Available commands:');
-        log('#help - Print this list.');
-        log('#stop - Stop the bot.');
-        log('#msgresponse [on|off] - Enable or disable automatic response to private messages.');
-        log('#togglechat - Show or hide the chat.');
-        log('#onlinetime - Show the online time of the bot.');
-        log('#listplayers - List the currently online players.');
-        log('#citybuild [cb name] [join command] - Change CityBuild.');
-        log('#authorise <name> - Authorise a player to execute bot commands.');
-        log('#unauthorise <name> - Unauthorise a player.');
-        log('#listauthorised - List the authorised players.');
-        log('#dropinv - Let the bot drop all items in its inventory.');
-        log('#listinv - Display the bots inventory.');
-        log('#reloadconfig - Reload the configuration file.');
-        log('#income - Show income since login.');
+        await log('cmd', 'Available commands:');
+        await log('cmd', '#help - Print this list.');
+        await log('cmd', '#stop - Stop the bot.');
+        await log('cmd', '#msgresponse [on|off] - Enable or disable automatic response to private messages.');
+        await log('cmd', '#togglechat - Show or hide the chat.');
+        await log('cmd', '#onlinetime - Show the online time of the bot.');
+        await log('cmd', '#listplayers - List the currently online players.');
+        await log('cmd', '#citybuild [cb name] [join command] - Change CityBuild.');
+        await log('cmd', '#authorise <name> - Authorise a player to execute bot commands.');
+        await log('cmd', '#unauthorise <name> - Unauthorise a player.');
+        await log('cmd', '#listauthorised - List the authorised players.');
+        await log('cmd', '#dropinv - Let the bot drop all items in its inventory.');
+        await log('cmd', '#listinv - Display the bots inventory.');
+        await log('cmd', '#reloadconfig - Reload the configuration file.');
+        await log('cmd', '#income - Show income since login.');
         break;
 
       case 'stop':
@@ -445,55 +451,56 @@ prompt.on('line', async msg => {
       
       case 'msgresponse':
         if(args.length == 1) {
-          log('Automatic response is '+(config.msgResponseActive ? 'on.' : 'off.'));
+          await log('cmd', 'Automatic response is '+(config.msgResponseActive ? 'on.' : 'off.'));
         } else {
           if(args[1].toLowerCase() == 'on') {
             if(config.msgResponse != '') {
               config.msgResponseActive = true;
-              log('Turned on automatic response.');
+              await log('cmd', 'Turned on automatic response.');
             } else {
-              log('No response specified in config file.');
+              await log('cmd', 'No response specified in config file.');
             }
           } else if(args[1].toLowerCase() == 'off') {
             config.msgResponseActive = false;
-            log('Turned off automatic response.');
+            await log('cmd', 'Turned off automatic response.');
           } else {
-            log('Usage: #msgresponse [on|off]');
+            await log('cmd', 'Usage: #msgresponse [on|off]');
           }
         }
         break;
 
       case 'togglechat':
         config.displayChat = !config.displayChat;
-        log((config.displayChat ? 'Enabled' : 'Disabled')+' chat messages.');
+        await log('cmd', (config.displayChat ? 'Enabled' : 'Disabled')+' chat messages.');
         break;
 
       case 'onlinetime':
-        log(`Bot is running for ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min.`);
+        await log('cmd', `Bot is running for ${Math.round(onlineTime / 60)}h ${onlineTime % 60}min.`);
         break;
 
       case 'listplayers':
         if(bot != null && bot.isOnline()) {
           const list = Object.keys(bot.client.players);
-          log('Online players ('+list.length+'): '+list.join(', '));
+          await log('cmd', 'Online players ('+list.length+'): '+list.join(', '));
         } else {
-          log('Bot is not connected to server.');
+          await log('cmd', 'Bot is not connected to server.');
         }
         break;
 
       case 'citybuild':
         if(bot != null && bot.isOnline()) {
           if(args.length == 1) {
-            log('Your current CityBuild: '+currentCityBuild);
+            await log('cmd', 'Your current CityBuild: '+currentCityBuild);
           } else if(args.length >= 2) {
             if(!connectingToCityBuild) {
               connectingToCityBuild = true;
               let connectErrorCount = 0;
               while(connectErrorCount < cityBuildConnectLimit && connectingToCityBuild) {
+                await log('info', `Trying to connect to CityBuild ${args[1].toLowerCase().replace('cb', '')}... (${connectErrorCount+1})`);
                 const result: any = await connectToCitybuild(args[1]);
                 if(result.success) {
                   connectingToCityBuild = false;
-                  log(`Connected to CityBuild ${currentCityBuild.replace('CB', '')}.`);
+                  await log('info', 'Connected to CityBuild.');
 
                   // execute command if defined
                   if(args.length >= 3) {
@@ -508,24 +515,24 @@ prompt.on('line', async msg => {
                 } else {
                   connectErrorCount++;
                   if(result.error.startsWith('There is no CityBuild named')) {
-                    log(result.error);
+                    await log('cmd', result.error);
                     connectingToCityBuild = false;
                   } else {
-                    log('Couldn\'t connect to CityBuild: '+result.error);
+                    await log('info', 'Couldn\'t connect to CityBuild: '+result.error);
                   }
                 }
               }
               if(connectErrorCount >= cityBuildConnectLimit) {
-                log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+                await log('info', 'CityBuild connection limit exceeded.');
               }
             } else {
-              log('Already connecting to citybuild. Please wait...');
+              await log('cmd', 'Already connecting to citybuild. Please wait...');
             }
           } else {
-            log('Usage: #citybuild [cb name]');
+            await log('cmd', 'Usage: #citybuild [cb name]');
           }
         } else {
-          log('Bot is not connected to server.');
+          await log('cmd', 'Bot is not connected to server.');
         }
         break;
 
@@ -533,12 +540,12 @@ prompt.on('line', async msg => {
         if(args.length == 2) {
           if(!config.authorisedPlayers.includes(args[1])) {
             config.authorisedPlayers.push(args[1]);
-            log('Authorised the player '+args[1]+'.');
+            await log('cmd', 'Authorised the player '+args[1]+'.');
           } else {
-            log('The player is already authorised.');
+            await log('cmd', 'The player is already authorised.');
           }
         } else {
-          log('Usage: #authorise <name>');
+          await log('cmd', 'Usage: #authorise <name>');
         }
         break;
 
@@ -546,70 +553,84 @@ prompt.on('line', async msg => {
         if(args.length == 2) {
           if(config.authorisedPlayers.includes(args[1])) {
             config.authorisedPlayers = config.authorisedPlayers.filter(e => e !== args[1]);
-            log('Removed the player '+args[1]+'.');
+            await log('cmd', 'Removed the player '+args[1]+'.');
           } else {
-            log('The player is not authorised.');
+            await log('cmd', 'The player is not authorised.');
           }
         } else {
-          log('Usage: #unauthorise <name>');
+          await log('cmd', 'Usage: #unauthorise <name>');
         }
         break;
 
       case 'listauthorised':
-        log('Authorised players: '+config.authorisedPlayers.join(', '));
+        await log('cmd', 'Authorised players: '+config.authorisedPlayers.join(', '));
         break;
 
       case 'dropinv':
         if(bot != null && bot.isOnline()) {
           dropInventory();
         } else {
-          log('Bot is not connected to server.');
+          await log('cmd', 'Bot is not connected to server.');
         }
         break;
         
       case 'listinv':
         if(bot != null && bot.isOnline()) {
           if(bot.client.inventory.items().length > 0) {
-            log('Inventory:');
-            bot.client.inventory.items().forEach(item => {
-              log(`Slot ${item.slot} - ${item.count}x ${item.displayName} (${item.type}:${item.metadata})`);
+            await log('cmd', 'Inventory:');
+            bot.client.inventory.items().forEach(async item => {
+              await log('cmd', `Slot ${item.slot} - ${item.count}x ${item.displayName} (${item.type}:${item.metadata})`);
             });
           } else {
-            log('Bots inventory is empty.');
+            await log('cmd', 'Bots inventory is empty.');
           }
         } else {
-          log('Bot is not connected to server.')
+          await log('cmd', 'Bot is not connected to server.')
         }
         break;
 
       case 'reloadconfig':
         loadConfig();
-        log('Configuration reloaded.');
+        await log('cmd', 'Configuration reloaded.');
         break;
 
       case 'income':
-        log('Income since login: $'+income);
+        await log('cmd', 'Income since login: $'+income);
         break;
 
       default:
-        log('Unknown command "#'+args[0]+'". View available commands with #help');
+        await log('cmd', 'Unknown command "#'+args[0]+'". View available commands with #help');
     }
   } else {
     // minecraft chat
     if(bot != null && bot.isOnline()) {
       bot.sendChat(msg);
     } else {
-      log('Bot is not connected to server.');
+      await log('cmd', 'Bot is not connected to server.');
     }
   }
 });
 
 
-function log(message: string, display: Boolean = true) {
+async function log(type: string, message: string) {
+  if(type == 'chat') message = '[CHAT] ' + message;
+
   const time = dateFormat(new Date(), 'HH:MM:ss');
   message = '['+time+'] '+message;
-  if(display) console.log(message);
-  if(config.logMessages) fs.appendFileSync(logFile, message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')+'\n');
+
+  if(type == 'chat') {
+    if(config.displayChat) console.log(message);
+  } else {
+    console.log(message);
+  }
+
+  if(config.logMessages)
+    fs.appendFileSync(logFile, message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')+'\n');
+  
+  if(discord != null && (type == 'info' || type == 'error')) {
+    const name = (bot != null && bot.client != null && bot.client.username != null) ? bot.client.username : config.account;
+    await discord.send('**['+name+']** '+message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, ''));
+  }
 }
 
 async function asyncForEach(array, callback) {
