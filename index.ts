@@ -53,7 +53,6 @@ if(changed) fs.writeFileSync('./node_modules/minecraft-data/minecraft-data/data/
 const gg = require('griefergames');
 const dateFormat = require('dateformat');
 const prompt = require('serverline');
-const Vec3 = require('vec3').Vec3;
 
 const cityBuildConnectLimit = 3;
 const serverKickLimit = 5;
@@ -395,7 +394,7 @@ function loadConfig() {
 }
 function loadCredentials() {
   const credentialsFile = JSON.parse(fs.readFileSync('./credentials.json'));
-  credentials = credentialsFile[config.account];
+  credentials = credentialsFile.minecraftAccounts[config.account];
 }
 
 
