@@ -178,7 +178,7 @@ async function startBot() {
         }
         setTimeout(() => {
           startBot();
-        }, 1200000); // 20min
+        }, 1800000); // 30min
         break;
       case "Du bist schon zu oft online!":
         exit();
