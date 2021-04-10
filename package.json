@@ -10,7 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "dateformat": "^3.0.3",
-    "discord-webhook-node": "^1.1.8",
     "griefergames": "git+https://github.com/Neocraftr/griefergames-bot.git",
     "serverline": "^1.5.0",
     "yargs": "^15.4.1"
