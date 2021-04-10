@@ -143,7 +143,7 @@ async function startBot() {
       }
       if(connectErrorCount >= cityBuildConnectLimit) {
         log('---------------------------------------------');
-        log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+        log('CityBuild connect limit exceeded!');
         exit();
       }
     }
@@ -169,7 +169,7 @@ async function startBot() {
         }
         setTimeout(() => {
           startBot();
-        }, 1800000); // 30min
+        }, 3600000); // 60min
         break;
       case "Du bist schon zu oft online!":
         exit();
@@ -183,7 +183,7 @@ async function startBot() {
           }, 5000);
         } else {
           log('---------------------------------------------');
-          log('Got kicked from the server '+serverKickLimit+' times.');
+          log('Server connect limit exceeded!');
           exit();
         }
     }
@@ -205,7 +205,7 @@ async function startBot() {
       }, 5000);
     } else {
       log('---------------------------------------------');
-      log('Got kicked from the server '+serverKickLimit+' times.');
+      log('Server connect limit exceeded!');
       exit();
     }
   });
@@ -516,7 +516,7 @@ prompt.on('line', async msg => {
                 }
               }
               if(connectErrorCount >= cityBuildConnectLimit) {
-                log('Couldn\'t connect to CityBuild '+cityBuildConnectLimit+' times.');
+                log('CityBuild connect limit exceeded!');
               }
             } else {
               log('Already connecting to citybuild. Please wait...');
