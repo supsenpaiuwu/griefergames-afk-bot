@@ -265,6 +265,9 @@ async function startBot() {
     // remove empty lines
     if(message.toString().trim() == '') return;
 
+    // remove supreme newlines
+    if(message.toString().trim() == '»') return;
+
     // remove broadcast messages
     if(message.toString() == '------------ [ News ] ------------') {
       broadcastMessage = !broadcastMessage;
